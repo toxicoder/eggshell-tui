@@ -4,18 +4,18 @@ This document outlines the detailed tasks for implementing the EggshellTUI frame
 
 ## Phase 1: Project Setup and Core Structure
 
-- [ ] **Initialize Project Files**
+- [x] **Initialize Project Files**
     - Create `eggshelltui.sh` (The framework library).
     - Create `myapp.sh` (The example application/consumer).
     - Ensure both are executable (`chmod +x`).
 
-- [ ] **Implement Core Action Layer in `eggshelltui.sh`**
+- [x] **Implement Core Action Layer in `eggshelltui.sh`**
     - Define `eggshelltui_execute_action` function.
     - Logic: Look up action name in global `ACTIONS` associative array.
     - Execute the corresponding function with arguments.
     - Error handling: Print error to stderr and exit if action not found.
 
-- [ ] **Implement Backend Detection**
+- [x] **Implement Backend Detection**
     - Create `eggshelltui_detect_backend` function.
     - Logic: Check `command -v dialog`, then `command -v whiptail`.
     - Set global `EGGSHELLTUI_BACKEND` to `dialog`, `whiptail`, or `text` (fallback).
