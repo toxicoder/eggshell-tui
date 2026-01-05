@@ -351,6 +351,309 @@ eggshelltui_textbox() {
     fi
 }
 
+# 10. Password Component
+# Usage: eggshelltui_password "Prompt" VAR_NAME [InitialValue]
+eggshelltui_password() {
+    local prompt="$1"
+    local var_name="$2"
+    local init_val="$3"
+
+    eggshelltui_calc_size 20 60
+
+    if [ "$EGGSHELLTUI_BACKEND" == "dialog" ] || [ "$EGGSHELLTUI_BACKEND" == "whiptail" ]; then
+        local temp_file=$(mktemp)
+        $EGGSHELLTUI_BACKEND --title "Password" --passwordbox "$prompt" "$EGGSHELLTUI_HEIGHT" "$EGGSHELLTUI_WIDTH" "$init_val" 2>"$temp_file"
+        local ret=$?
+        local result=$(<"$temp_file")
+        rm -f "$temp_file"
+
+        if [ $ret -eq 0 ]; then
+            if [ -n "$BASH_VERSION" ]; then
+                printf -v "$var_name" '%s' "$result"
+            else
+                read -r "$var_name" <<< "$result"
+            fi
+            return 0
+        else
+            return 1
+        fi
+    else
+        echo "$prompt"
+        # read -s for silent input
+        if [ -n "$BASH_VERSION" ]; then
+            read -s -p "Password: " input_val
+            echo "" # Newline after silent read
+            printf -v "$var_name" '%s' "$input_val"
+        else
+            # POSIX sh doesn't always support -s, but zsh does.
+            stty -echo
+            read -r input_val
+            stty echo
+            echo ""
+            read -r "$var_name" <<< "$input_val"
+        fi
+        return 0
+    fi
+}
+
+# 11. Form Component (Multiple Inputs)
+# Usage: eggshelltui_form "Title" ARRAY_VAR_NAME "Label1" "Init1" "Label2" "Init2" ...
+eggshelltui_form() {
+    local title="$1"
+    local var_name="$2"
+    shift 2
+
+    eggshelltui_calc_size 80 60
+    local -a fields=("$@")
+    local -a form_args
+    local row=1
+
+    if [ "$EGGSHELLTUI_BACKEND" == "dialog" ]; then
+        for ((i=0; i<${#fields[@]}; i+=2)); do
+            # Label Y X Item Y X FLen ILen
+            form_args+=("${fields[i]}" "$row" 1 "${fields[i+1]}" "$row" 20 40 100)
+            ((row++))
+        done
+
+        local form_height=$(( row + 2 ))
+        if [ "$form_height" -gt "$EGGSHELLTUI_HEIGHT" ]; then form_height=$EGGSHELLTUI_HEIGHT; fi
+
+        local temp_file=$(mktemp)
+        $EGGSHELLTUI_BACKEND --title "$title" --form "Enter details:" "$EGGSHELLTUI_HEIGHT" "$EGGSHELLTUI_WIDTH" "$form_height" \
+            "${form_args[@]}" 2>"$temp_file"
+
+        local ret=$?
+
+        if [ $ret -eq 0 ]; then
+             if [ -n "$BASH_VERSION" ]; then
+                 mapfile -t "$var_name" < "$temp_file"
+             elif [ -n "$ZSH_VERSION" ]; then
+                 local -a lines
+                 lines=("${(@f)$(<"$temp_file")}")
+                 eval "$var_name=(\"\${lines[@]}\")"
+             fi
+             rm -f "$temp_file"
+             return 0
+        else
+             rm -f "$temp_file"
+             return 1
+        fi
+
+    else
+        # Fallback for whiptail and text (Wizard style)
+        local -a collected_values
+        for ((i=0; i<${#fields[@]}; i+=2)); do
+            local l="${fields[i]}"
+            local init="${fields[i+1]}"
+            local temp_res=""
+
+            eggshelltui_input "$l ($((i/2+1))/${#fields[@]})" temp_res "$init"
+            if [ $? -ne 0 ]; then return 1; fi
+            collected_values+=("$temp_res")
+        done
+
+        if [ -n "$BASH_VERSION" ]; then
+             # Securely copy the array
+             local declare_str
+             declare_str=$(declare -p collected_values)
+             # Repackage into new name
+             eval "${declare_str/collected_values/$var_name}"
+        elif [ -n "$ZSH_VERSION" ]; then
+             # Zsh assignment is generally safer but eval is still tricky.
+             # Use (P) for indirect reference if possible, but we are writing TO it.
+             # set -A var_name "${collected_values[@]}"
+             # Using eval with quoting is standard in Zsh for dynamic naming if careful.
+             # We need to escape contents to be safe in eval.
+             # (q) flag in Zsh quotes words.
+             eval "$var_name=(\${(q)collected_values[@]})"
+        fi
+        return 0
+    fi
+}
+
+# 12. Calendar Component
+# Usage: eggshelltui_calendar "Title" VAR_NAME [Day] [Month] [Year]
+eggshelltui_calendar() {
+    local title="$1"
+    local var_name="$2"
+    local day="${3:-$(date +%d)}"
+    local month="${4:-$(date +%m)}"
+    local year="${5:-$(date +%Y)}"
+
+    eggshelltui_calc_size 60 60 # Calendar needs less space
+
+    if [ "$EGGSHELLTUI_BACKEND" == "dialog" ]; then
+        local temp_file=$(mktemp)
+        $EGGSHELLTUI_BACKEND --title "$title" --calendar "Select date:" 0 0 "$day" "$month" "$year" 2>"$temp_file"
+        local ret=$?
+        local result=$(<"$temp_file")
+        rm -f "$temp_file"
+
+        if [ $ret -eq 0 ]; then
+             # Dialog returns DD/MM/YYYY.
+             if [ -n "$BASH_VERSION" ]; then
+                 printf -v "$var_name" '%s' "$result"
+             else
+                 read -r "$var_name" <<< "$result"
+             fi
+             return 0
+        else
+            return 1
+        fi
+    else
+        # Fallback
+        local current_date="$year-$month-$day"
+        local input_date=""
+        eggshelltui_input "Enter Date (YYYY-MM-DD):" input_date "$current_date"
+        if [ $? -eq 0 ]; then
+             if [ -n "$BASH_VERSION" ]; then
+                 printf -v "$var_name" '%s' "$input_date"
+             else
+                 read -r "$var_name" <<< "$input_date"
+             fi
+             return 0
+        else
+            return 1
+        fi
+    fi
+}
+
+# 13. Timebox Component
+# Usage: eggshelltui_timebox "Title" VAR_NAME [Hour] [Minute] [Second]
+eggshelltui_timebox() {
+    local title="$1"
+    local var_name="$2"
+    local hour="${3:-$(date +%H)}"
+    local min="${4:-$(date +%M)}"
+    local sec="${5:-$(date +%S)}"
+
+    eggshelltui_calc_size 60 60
+
+    if [ "$EGGSHELLTUI_BACKEND" == "dialog" ]; then
+        local temp_file=$(mktemp)
+        $EGGSHELLTUI_BACKEND --title "$title" --timebox "Select time:" 0 0 "$hour" "$min" "$sec" 2>"$temp_file"
+        local ret=$?
+        local result=$(<"$temp_file")
+        rm -f "$temp_file"
+
+        if [ $ret -eq 0 ]; then
+             # Dialog returns HH:MM:SS
+             if [ -n "$BASH_VERSION" ]; then
+                 printf -v "$var_name" '%s' "$result"
+             else
+                 read -r "$var_name" <<< "$result"
+             fi
+             return 0
+        else
+            return 1
+        fi
+    else
+        # Fallback
+        local current_time="$hour:$min:$sec"
+        local input_time=""
+        eggshelltui_input "Enter Time (HH:MM:SS):" input_time "$current_time"
+        if [ $? -eq 0 ]; then
+             if [ -n "$BASH_VERSION" ]; then
+                 printf -v "$var_name" '%s' "$input_time"
+             else
+                 read -r "$var_name" <<< "$input_time"
+             fi
+             return 0
+        else
+            return 1
+        fi
+    fi
+}
+
+# 14. Range Component (Slider)
+# Usage: eggshelltui_range "Title" VAR_NAME Min Max Default
+eggshelltui_range() {
+    local title="$1"
+    local var_name="$2"
+    local min="$3"
+    local max="$4"
+    local def="$5"
+
+    eggshelltui_calc_size 60 60
+
+    if [ "$EGGSHELLTUI_BACKEND" == "dialog" ]; then
+        local temp_file=$(mktemp)
+        $EGGSHELLTUI_BACKEND --title "$title" --rangebox "Select value:" 0 0 "$min" "$max" "$def" 2>"$temp_file"
+        local ret=$?
+        local result=$(<"$temp_file")
+        rm -f "$temp_file"
+
+        if [ $ret -eq 0 ]; then
+             if [ -n "$BASH_VERSION" ]; then
+                 printf -v "$var_name" '%s' "$result"
+             else
+                 read -r "$var_name" <<< "$result"
+             fi
+             return 0
+        else
+            return 1
+        fi
+    else
+        # Fallback
+        local input_val=""
+        eggshelltui_input "Enter Value ($min - $max):" input_val "$def"
+        if [ $? -eq 0 ]; then
+             # TODO: Validate range?
+             if [ -n "$BASH_VERSION" ]; then
+                 printf -v "$var_name" '%s' "$input_val"
+             else
+                 read -r "$var_name" <<< "$input_val"
+             fi
+             return 0
+        else
+            return 1
+        fi
+    fi
+}
+
+# 15. File Select Component
+# Usage: eggshelltui_fileselect "Title" VAR_NAME [InitialPath]
+eggshelltui_fileselect() {
+    local title="$1"
+    local var_name="$2"
+    local init_path="${3:-.}"
+
+    eggshelltui_calc_size 80 80
+
+    if [ "$EGGSHELLTUI_BACKEND" == "dialog" ]; then
+        local temp_file=$(mktemp)
+        $EGGSHELLTUI_BACKEND --title "$title" --fselect "$init_path" "$EGGSHELLTUI_HEIGHT" "$EGGSHELLTUI_WIDTH" 2>"$temp_file"
+        local ret=$?
+        local result=$(<"$temp_file")
+        rm -f "$temp_file"
+
+        if [ $ret -eq 0 ]; then
+             if [ -n "$BASH_VERSION" ]; then
+                 printf -v "$var_name" '%s' "$result"
+             else
+                 read -r "$var_name" <<< "$result"
+             fi
+             return 0
+        else
+            return 1
+        fi
+    else
+        # Fallback
+        local input_val=""
+        eggshelltui_input "Enter File Path:" input_val "$init_path"
+        if [ $? -eq 0 ]; then
+             if [ -n "$BASH_VERSION" ]; then
+                 printf -v "$var_name" '%s' "$input_val"
+             else
+                 read -r "$var_name" <<< "$input_val"
+             fi
+             return 0
+        else
+            return 1
+        fi
+    fi
+}
+
 # --- Main Loop Helper ---
 
 eggshelltui_enter_loop() {

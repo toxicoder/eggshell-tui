@@ -22,6 +22,7 @@ function screen_main() {
         "msgbox" "Message Box Demo" \
         "gauge" "Progress Bar Demo" \
         "textbox" "Text Box (File Viewer) Demo" \
+        "m3" "Material 3 / Extended Components" \
         "exit" "Exit Application"
 
     local choice=$?
@@ -34,7 +35,8 @@ function screen_main() {
         5) CURRENT_SCREEN="msgbox" ;;
         6) CURRENT_SCREEN="gauge" ;;
         7) CURRENT_SCREEN="textbox" ;;
-        8) clear; exit 0 ;;
+        8) CURRENT_SCREEN="m3" ;;
+        9) clear; exit 0 ;;
         *) clear; exit 0 ;; # Cancel
     esac
 }
@@ -99,6 +101,49 @@ function screen_gauge() {
 function screen_textbox() {
     # Show the script itself as an example
     eggshelltui_textbox "Source Code Viewer" "eggshelltui.sh"
+    CURRENT_SCREEN="main"
+}
+
+function screen_m3() {
+    # Password
+    local pw=""
+    eggshelltui_password "Enter Password:" pw
+    eggshelltui_msgbox "Password" "You entered: $pw"
+
+    # Form
+    local -a form_res
+    eggshelltui_form "User Details" form_res \
+        "First Name:" "John" \
+        "Last Name:" "Doe" \
+        "Email:" "john@example.com"
+
+    # Format output for display
+    local form_out=""
+    for item in "${form_res[@]}"; do
+        form_out+="$item\n"
+    done
+    eggshelltui_msgbox "Form Results" "Values:\n$form_out"
+
+    # Calendar
+    local date_res=""
+    eggshelltui_calendar "Select Date" date_res
+    eggshelltui_msgbox "Date" "Selected: $date_res"
+
+    # Timebox
+    local time_res=""
+    eggshelltui_timebox "Select Time" time_res
+    eggshelltui_msgbox "Time" "Selected: $time_res"
+
+    # Range
+    local range_res=""
+    eggshelltui_range "Select Volume" range_res 0 100 50
+    eggshelltui_msgbox "Volume" "Set to: $range_res"
+
+    # File Select
+    local file_res=""
+    eggshelltui_fileselect "Select a File" file_res "."
+    eggshelltui_msgbox "File" "Selected: $file_res"
+
     CURRENT_SCREEN="main"
 }
 
