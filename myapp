@@ -1,0 +1,165 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# shellcheck source=eggshelltui.sh
+source eggshelltui.sh
+
+# Trap cleanup on exit
+trap eggshelltui_cleanup EXIT
+
+# 1. Define Logic (CLI)
+cli_demo_menu() {
+  printf "Running Menu Demo...\n"
+}
+
+cli_demo_input() {
+  printf "You entered: %s\n" "$1"
+}
+
+# 2. Define Screens (TUI)
+
+screen_main() {
+  local choice=""
+  if eggshelltui_menu "EggshellTUI Component Demo" choice \
+    "input" "Input Box Demo" \
+    "checklist" "Checklist Demo" \
+    "radiolist" "Radiolist Demo" \
+    "yesno" "Yes/No Dialog Demo" \
+    "msgbox" "Message Box Demo" \
+    "gauge" "Progress Bar Demo" \
+    "textbox" "Text Box (File Viewer) Demo" \
+    "m3" "Material 3 / Extended Components" \
+    "exit" "Exit Application"; then
+
+    case $choice in
+      1) CURRENT_SCREEN="input" ;;
+      2) CURRENT_SCREEN="checklist" ;;
+      3) CURRENT_SCREEN="radiolist" ;;
+      4) CURRENT_SCREEN="yesno" ;;
+      5) CURRENT_SCREEN="msgbox" ;;
+      6) CURRENT_SCREEN="gauge" ;;
+      7) CURRENT_SCREEN="textbox" ;;
+      8) CURRENT_SCREEN="m3" ;;
+      9) clear; exit 0 ;;
+      *) clear; exit 0 ;; # Should be unreachable if exit code checked, but safe
+    esac
+  else
+    clear
+    exit 0
+  fi
+}
+
+screen_input() {
+  if eggshelltui_input "What is your favorite color?" USER_COLOR "Blue"; then
+    eggshelltui_msgbox "Result" "You chose: $USER_COLOR"
+  fi
+  CURRENT_SCREEN="main"
+}
+
+screen_checklist() {
+  if eggshelltui_checklist "Select Fruits" FRUIT_SELECTION \
+    "apple" "Apple" "on" \
+    "banana" "Banana" "off" \
+    "orange" "Orange" "off"; then
+    eggshelltui_msgbox "Result" "You selected: $FRUIT_SELECTION"
+  fi
+  CURRENT_SCREEN="main"
+}
+
+screen_radiolist() {
+  if eggshelltui_radiolist "Select Difficulty" DIFFICULTY \
+    "easy" "Easy Mode" "on" \
+    "medium" "Medium Mode" "off" \
+    "hard" "Hard Mode" "off"; then
+    eggshelltui_msgbox "Result" "Difficulty set to: $DIFFICULTY"
+  fi
+  CURRENT_SCREEN="main"
+}
+
+screen_yesno() {
+  if eggshelltui_yesno "Confirmation" "Do you like this framework?"; then
+    eggshelltui_msgbox "Response" "Glad to hear it!"
+  else
+    eggshelltui_msgbox "Response" "We will try to improve."
+  fi
+  CURRENT_SCREEN="main"
+}
+
+screen_msgbox() {
+  eggshelltui_msgbox "Information" "This is a simple message box.\nIt wraps text automatically and supports responsive resizing."
+  CURRENT_SCREEN="main"
+}
+
+screen_gauge() {
+  # Simulate progress
+  for i in {0..100..10}; do
+    eggshelltui_gauge "Loading..." "Processing data" "$i"
+    sleep 0.1
+  done
+  eggshelltui_msgbox "Done" "Process completed."
+  CURRENT_SCREEN="main"
+}
+
+screen_textbox() {
+  # Show the script itself as an example
+  eggshelltui_textbox "Source Code Viewer" "eggshelltui.sh"
+  CURRENT_SCREEN="main"
+}
+
+screen_m3() {
+  # Password
+  local pw=""
+  eggshelltui_password "Enter Password:" pw
+  eggshelltui_msgbox "Password" "You entered: $pw"
+
+  # Form
+  local -a form_res
+  if eggshelltui_form "User Details" form_res \
+    "First Name:" "John" \
+    "Last Name:" "Doe" \
+    "Email:" "john@example.com"; then
+
+    # Format output for display
+    local form_out=""
+    for item in "${form_res[@]}"; do
+      form_out+="$item\n"
+    done
+    eggshelltui_msgbox "Form Results" "Values:\n$form_out"
+  fi
+
+  # Calendar
+  local date_res=""
+  if eggshelltui_calendar "Select Date" date_res; then
+    eggshelltui_msgbox "Date" "Selected: $date_res"
+  fi
+
+  # Timebox
+  local time_res=""
+  if eggshelltui_timebox "Select Time" time_res; then
+    eggshelltui_msgbox "Time" "Selected: $time_res"
+  fi
+
+  # Range
+  local range_res=""
+  if eggshelltui_range "Select Volume" range_res 0 100 50; then
+    eggshelltui_msgbox "Volume" "Set to: $range_res"
+  fi
+
+  # File Select
+  local file_res=""
+  if eggshelltui_fileselect "Select a File" file_res "."; then
+    eggshelltui_msgbox "File" "Selected: $file_res"
+  fi
+
+  CURRENT_SCREEN="main"
+}
+
+# 3. Main Entry
+# Check if $1 is set safely
+if [[ "${1:-}" == "--tui" ]]; then
+  CURRENT_SCREEN="main"
+  eggshelltui_enter_loop
+else
+  printf "Usage: %s --tui\n" "$0"
+  printf "This demo is primarily for testing TUI components.\n"
+fi
